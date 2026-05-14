@@ -1,0 +1,372 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url     = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// USERS & WORKSPACES
+// ─────────────────────────────────────────
+
+model User {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  name           String
+  avatarUrl      String?   @map("avatar_url")
+  passwordHash   String?   @map("password_hash")
+  oauthProvider  String?   @map("oauth_provider")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  workspaceMemberships WorkspaceMember[]
+  ownedWorkspaces      Workspace[]       @relation("WorkspaceOwner")
+  projects             Project[]         @relation("ProjectCreator")
+  uploadedAssets       Asset[]
+  exportJobs           ExportJob[]
+  operationLogs        OperationLog[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model Workspace {
+  id        String        @id @default(uuid())
+  name      String
+  slug      String        @unique
+  plan      WorkspacePlan @default(FREE)
+  ownerId   String        @map("owner_id")
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  owner       User              @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+  members     WorkspaceMember[]
+  projects    Project[]
+  invitations Invitation[]
+
+  @@index([ownerId])
+  @@map("workspaces")
+}
+
+enum WorkspacePlan {
+   FREE
+   PRO
+   TEAM
+}
+
+model WorkspaceMember {
+  id          String          @id @default(uuid())
+  workspaceId String          @map("workspace_id")
+  userId      String          @map("user_id")
+  role        WorkspaceRole   @default(VIEWER)
+  joinedAt    DateTime        @default(now()) @map("joined_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+model Invitation {
+  id          String           @id @default(uuid())
+  workspaceId String           @map("workspace_id")
+  email       String
+  role        WorkspaceRole    @default(EDITOR)
+  status      InvitationStatus @default(PENDING)
+  token       String           @unique @default(uuid())
+  expiresAt   DateTime         @map("expires_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([token])
+  @@map("invitations")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+}
+
+// ─────────────────────────────────────────
+// PROJECTS & ASSETS
+// ─────────────────────────────────────────
+
+model Project {
+  id          String    @id @default(uuid())
+  workspaceId String    @map("workspace_id")
+  name        String
+  description String?
+  settings    Json      @default("{\"resolution\":\"1080p\",\"fps\":30,\"aspectRatio\":\"16:9\"}")
+  createdById String    @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  workspace  Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy  User           @relation("ProjectCreator", fields: [createdById], references: [id])
+  assets     Asset[]
+  tracks     Track[]
+  clips      Clip[]
+  transitions Transition[]
+  textOverlays TextOverlay[]
+  exportJobs ExportJob[]
+  operationLogs OperationLog[]
+
+  @@index([workspaceId])
+  @@index([createdById])
+  @@index([deletedAt])
+  @@map("projects")
+}
+
+model Asset {
+  id          String      @id @default(uuid())
+  projectId   String      @map("project_id")
+  uploadedById String     @map("uploaded_by")
+  type        AssetType
+  originalUrl String      @map("original_url")
+  status      AssetStatus @default(UPLOADING)
+  metadata    Json?
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  deletedAt   DateTime?   @map("deleted_at")
+
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy User           @relation(fields: [uploadedById], references: [id])
+  variants   AssetVariant[]
+  clips      Clip[]
+
+  @@index([projectId])
+  @@index([status])
+  @@map("assets")
+}
+
+enum AssetType {
+  VIDEO
+  AUDIO
+  IMAGE
+}
+
+enum AssetStatus {
+  UPLOADING
+  PROCESSING
+  READY
+  FAILED
+}
+
+model AssetVariant {
+  id       String @id @default(uuid())
+  assetId  String @map("asset_id")
+  type     AssetVariantType
+  url      String
+  metadata Json?
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@map("asset_variants")
+}
+
+enum AssetVariantType {
+  PROXY
+  THUMBNAIL_STRIP
+  WAVEFORM_DATA
+}
+
+// ─────────────────────────────────────────
+// TIMELINE
+// ─────────────────────────────────────────
+
+model Track {
+  id         String    @id @default(uuid())
+  projectId  String    @map("project_id")
+  type       TrackType
+  label      String
+  orderIndex Int       @map("order_index")
+  isLocked   Boolean   @default(false) @map("is_locked")
+  isMuted    Boolean   @default(false) @map("is_muted")
+  color      String    @default("#6c63ff")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  clips   Clip[]
+
+  @@index([projectId])
+  @@map("tracks")
+}
+
+enum TrackType {
+  VIDEO
+  AUDIO
+}
+
+model Clip {
+  id               String    @id @default(uuid())
+  trackId          String    @map("track_id")
+  projectId        String    @map("project_id")
+  assetId          String    @map("asset_id")
+  trackPositionMs  Int       @map("track_position_ms")
+  inPointMs        Int       @map("in_point_ms")
+  outPointMs       Int       @map("out_point_ms")
+  durationMs       Int       @map("duration_ms")
+  transform        Json      @default("{\"x\":0,\"y\":0,\"scale\":1,\"rotation\":0,\"opacity\":1}")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
+
+  track   Track        @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  project Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  asset   Asset        @relation(fields: [assetId], references: [id])
+  effects ClipEffect[]
+  transitionsFrom Transition[] @relation("FromClip")
+  transitionsTo   Transition[] @relation("ToClip")
+
+  @@index([trackId])
+  @@index([projectId])
+  @@index([assetId])
+  @@index([deletedAt])
+  @@map("clips")
+}
+
+model ClipEffect {
+  id         String   @id @default(uuid())
+  clipId     String   @map("clip_id")
+  type       String
+  orderIndex Int      @map("order_index")
+  params     Json     @default("{}")
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  clip Clip @relation(fields: [clipId], references: [id], onDelete: Cascade)
+
+  @@index([clipId])
+  @@map("clip_effects")
+}
+
+model Transition {
+  id          String @id @default(uuid())
+  projectId   String @map("project_id")
+  fromClipId  String @map("from_clip_id")
+  toClipId    String @map("to_clip_id")
+  type        String @default("dissolve")
+  durationMs  Int    @map("duration_ms")
+  params      Json   @default("{}")
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fromClip  Clip    @relation("FromClip", fields: [fromClipId], references: [id], onDelete: Cascade)
+  toClip    Clip    @relation("ToClip", fields: [toClipId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("transitions")
+}
+
+model TextOverlay {
+  id               String   @id @default(uuid())
+  projectId        String   @map("project_id")
+  trackPositionMs  Int      @map("track_position_ms")
+  durationMs       Int      @map("duration_ms")
+  content          String
+  fontFamily       String   @default("Inter") @map("font_family")
+  fontSize         Int      @default(32) @map("font_size")
+  fontColor        String   @default("#ffffff") @map("font_color")
+  position         Json     @default("{\"x\":0.5,\"y\":0.9}")
+  alignment        String   @default("center")
+  backgroundColor  String?  @map("background_color")
+  backgroundOpacity Float   @default(0) @map("background_opacity")
+  animation        String   @default("none")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("text_overlays")
+}
+
+// ─────────────────────────────────────────
+// EXPORTS & JOBS
+// ─────────────────────────────────────────
+
+model ExportJob {
+  id              String       @id @default(uuid())
+  projectId       String       @map("project_id")
+  requestedById   String       @map("requested_by")
+  format          ExportFormat @default(MP4)
+  resolution      String       @default("1080p")
+  quality         ExportQuality @default(STANDARD)
+  status          ExportStatus  @default(QUEUED)
+  progressPercent Int          @default(0) @map("progress_percent")
+  outputUrl       String?      @map("output_url")
+  outputFileSize  BigInt?      @map("output_file_size")
+  startedAt       DateTime?    @map("started_at")
+  completedAt     DateTime?    @map("completed_at")
+  expiresAt       DateTime?    @map("expires_at")
+  errorMessage    String?      @map("error_message")
+  idempotencyKey  String       @unique @map("idempotency_key")
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requestedBy User    @relation(fields: [requestedById], references: [id])
+
+  @@index([projectId])
+  @@index([status])
+  @@map("export_jobs")
+}
+
+enum ExportFormat {
+  MP4
+  WEBM
+}
+
+enum ExportQuality {
+  DRAFT
+  STANDARD
+  HIGH
+}
+
+enum ExportStatus {
+  QUEUED
+  PROCESSING
+  UPLOADING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model OperationLog {
+  id            String   @id @default(uuid())
+  projectId     String   @map("project_id")
+  userId        String   @map("user_id")
+  operationType String   @map("operation_type")
+  payload       Json
+  clientSeq     Int      @map("client_seq")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([projectId, createdAt])
+  @@index([userId])
+  @@map("operation_logs")
+}
