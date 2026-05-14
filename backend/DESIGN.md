@@ -33,3 +33,34 @@ older than 1 year. This keeps the hot partition small while retaining history.
 - clip_effects: ~900,000 rows (avg 3 per clip) = ~360 MB
 - operation_logs: ~10M rows (100 ops/clip avg) = ~4 GB (partitioned)
 Total hot storage: ~500 MB PostgreSQL data. Manageable on a single instance.
+
+# Task 2: API Design Decisions
+
+## 1. Why cursor-based pagination instead of offset?
+OFFSET pagination requires the DB to scan and discard all rows before the offset —
+slow on large tables. Cursor pagination uses the last item's ID as a pointer,
+letting the DB use the index directly (O(log n) vs O(n)). It also handles insertions
+correctly: if a new project is added while paginating, offset-based would skip or
+duplicate items. Cursors are stable.
+
+## 2. Presigned upload flow — why not upload through the backend?
+Routing a 500MB video through NestJS means: (a) the request blocks a Node.js worker
+for the duration of the upload (minutes), (b) the file sits in memory or on disk
+on the API server, (c) you pay double bandwidth (client → server → S3).
+With presigned URLs: client uploads directly to S3, API server only handles metadata.
+The server generates a time-limited (15 min) signed URL that lets the client PUT
+directly to the specific S3 key. Confirm-upload then triggers the processing pipeline.
+
+## 3. Batch clip operations — atomic or partial? Why?
+Atomic (Prisma $transaction). Timeline operations must be consistent — a "move 5 clips
+right by 2 seconds" that partially fails leaves the timeline in an impossible state
+(some clips moved, others not), breaking playback ordering. Transactions ensure
+all-or-nothing. The tradeoff is that a single invalid clip ID fails the entire batch,
+but that's the correct behavior for a timeline editor.
+
+## 4. API versioning strategy for breaking changes
+URL versioning: /v2/projects/:id. The v1 route stays alive for a deprecation window
+(typically 6 months). We add a Deprecation: true header to v1 responses to signal
+clients to migrate. For non-breaking additive changes (new optional fields, new
+endpoints), no versioning needed. Schema versioning is tracked in a separate
+API changelog document.
