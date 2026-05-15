@@ -1,122 +1,68 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState, useEffect } from 'react';
+import { authApi, workspacesApi } from '@/services/api';
+import EditorLayout from '@/components/layout/EditorLayout';
+import LoginPage from '@/components/auth/LoginPage';
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      authApi.me()
+        .then((user) => {
+          localStorage.setItem('userId', user.id);
+          setIsLoggedIn(true);
+          return workspacesApi.list();
+        })
+        .then((workspaces) => {
+          if (workspaces.length > 0) {
+            return fetch(
+              `http://localhost:3000/projects?workspaceId=${workspaces[0].id}`,
+              { headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` } }
+            ).then((r) => r.json());
+          }
+        })
+        .then((projectsData) => {
+          if (projectsData?.data?.length > 0) {
+            // Find Summer Campaign project (seeded), otherwise use first
+            const seeded = projectsData.data.find((p: any) =>
+              p.name.includes('Summer') || p.name.includes('Campaign')
+            );
+            setProjectId(seeded ? seeded.id : projectsData.data[0].id);
+          }
+        })
+        .catch(() => {
+          localStorage.removeItem('accessToken');
+          setIsLoggedIn(false);
+        })
+        .finally(() => setIsLoading(false));
+    } else {
+      setIsLoading(false);
+    }
+  }, []);
 
-      <div className="ticks"></div>
+  const handleLogin = (token: string, userId: string) => {
+    localStorage.setItem('accessToken', token);
+    localStorage.setItem('userId', userId);
+    setIsLoggedIn(true);
+    window.location.reload();
+  };
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen"
+        style={{ background: 'hsl(224 71% 4%)', color: 'hsl(213 31% 91%)' }}>
+        <div>Loading CloudCut...</div>
+      </div>
+    );
+  }
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+  if (!isLoggedIn) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
+
+  return <EditorLayout projectId={projectId} />;
 }
-
-export default App

@@ -100,3 +100,37 @@ re-queuing (corrupted file, out-of-memory, S3 permission issue etc.).
 - S3 transfer: 500MB download (source) + 500MB upload (output) = 1GB → $0.09/GB = $0.009
 - Total per export: ~$0.02-0.03
 - At 1000 exports/month: ~$20-30/month
+
+# Task 4: Collaboration Design Decisions
+
+## 1. Why Pusher over self-hosted WebSocket?
+Self-hosted WebSockets require: a persistent server process, sticky sessions for load balancing,
+handling reconnects/heartbeats, and operational monitoring. Pusher handles all of this and
+provides a free tier of 200k messages/day — enough for a prototype with dozens of users.
+The tradeoff is a per-message cost at scale and less control over the transport layer.
+
+## 2. Client events vs server events — why are cursor positions client events?
+Client events (prefixed client-) go directly peer-to-peer via Pusher without hitting our server.
+Cursor positions update ~10 times/second per user — at 5 collaborators that's 50 req/sec hitting
+your NestJS server if they were server events. More critically, cursor positions don't need to
+be persisted (nobody cares where your cursor was 2 seconds ago). Client events are the right
+tool for ephemeral, high-frequency, non-persistent data.
+
+## 3. Offline reconnect — syncing missed operations
+When a client reconnects, it sends its last known OperationLog ID (or timestamp) to:
+GET /projects/:id/operations?since=2025-01-01T00:00:00Z
+The server returns all operations since that point, ordered by createdAt.
+The client replays them in order against its local state. This is last-write-wins (LWW):
+later operations overwrite earlier ones for the same property.
+
+## 4. Optimizing Pusher message frequency
+Batch small updates: instead of sending one Pusher event per effect slider change (which fires
+many times/second while dragging), debounce 300ms and send one event after the drag ends.
+For cursor moves, throttle to every 100ms max. Group related changes (e.g. moving 5 clips at
+once) into a single broadcast instead of 5 separate events.
+
+## 5. Scaling beyond Pusher
+Options: (a) Ably — similar API, higher limits; (b) Socket.io with Redis adapter for horizontal
+scaling of self-hosted WebSockets; (c) Cloudflare Durable Objects for edge-native real-time.
+The migration path: keep the same event/channel naming convention, swap the Pusher SDK for the
+new provider's SDK in both pusher.service.ts and the frontend usePusher.ts hook.

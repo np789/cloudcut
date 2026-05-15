@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { WorkspacesService } from '../workspaces/workspaces.service';
+import { OperationLogService } from '../collaboration/operation-log.service';
 import {
   CreateTrackDto, UpdateTrackDto,
   CreateClipDto, UpdateClipDto, SplitClipDto, BatchClipOperationDto,
@@ -13,9 +14,9 @@ export class TimelineService {
   constructor(
     private prisma: PrismaService,
     private workspacesService: WorkspacesService,
+    private opLog: OperationLogService,
   ) {}
 
-  // ── Private helpers ────────────────────────────────────
   private async getProjectAndAuthorize(projectId: string, userId: string) {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId, deletedAt: null },
@@ -39,38 +40,34 @@ export class TimelineService {
     return clip;
   }
 
-  // ── Tracks ────────────────────────────────────────────
   async createTrack(projectId: string, userId: string, dto: CreateTrackDto) {
     await this.getProjectAndAuthorize(projectId, userId);
-    return this.prisma.track.create({
+    const track = await this.prisma.track.create({
       data: { projectId, ...dto },
     });
+    await this.opLog.logAndBroadcast(projectId, userId, 'track.add', { track });
+    return track;
   }
 
   async updateTrack(projectId: string, trackId: string, userId: string, dto: UpdateTrackDto) {
     await this.getProjectAndAuthorize(projectId, userId);
-    return this.prisma.track.update({
-      where: { id: trackId },
-      data: dto,
-    });
+    const track = await this.prisma.track.update({ where: { id: trackId }, data: dto });
+    await this.opLog.logAndBroadcast(projectId, userId, 'track.update', { trackId, changes: dto });
+    return track;
   }
 
   async deleteTrack(projectId: string, trackId: string, userId: string) {
     await this.getProjectAndAuthorize(projectId, userId);
-    // Soft-delete all clips on the track
-    await this.prisma.clip.updateMany({
-      where: { trackId },
-      data: { deletedAt: new Date() },
-    });
+    await this.prisma.clip.updateMany({ where: { trackId }, data: { deletedAt: new Date() } });
     await this.prisma.track.delete({ where: { id: trackId } });
+    await this.opLog.logAndBroadcast(projectId, userId, 'track.delete', { trackId });
     return { message: 'Track deleted' };
   }
 
-  // ── Clips ─────────────────────────────────────────────
   async createClip(projectId: string, userId: string, dto: CreateClipDto) {
     await this.getProjectAndAuthorize(projectId, userId);
     const durationMs = dto.outPointMs - dto.inPointMs;
-    return this.prisma.clip.create({
+    const clip = await this.prisma.clip.create({
       data: {
         projectId,
         trackId: dto.trackId,
@@ -83,6 +80,8 @@ export class TimelineService {
       },
       include: { effects: true },
     });
+    await this.opLog.logAndBroadcast(projectId, userId, 'clip.add', { clip });
+    return clip;
   }
 
   async updateClip(projectId: string, clipId: string, userId: string, dto: UpdateClipDto) {
@@ -96,19 +95,19 @@ export class TimelineService {
             ? clip.outPointMs - dto.inPointMs
             : undefined;
 
-    return this.prisma.clip.update({
+    const updated = await this.prisma.clip.update({
       where: { id: clipId },
       data: { ...dto, ...(durationMs !== undefined ? { durationMs } : {}) },
       include: { effects: true },
     });
+    await this.opLog.logAndBroadcast(projectId, userId, 'clip.update', { clipId, changes: dto });
+    return updated;
   }
 
   async deleteClip(projectId: string, clipId: string, userId: string) {
     await this.getClipAndAuthorize(clipId, userId);
-    await this.prisma.clip.update({
-      where: { id: clipId },
-      data: { deletedAt: new Date() },
-    });
+    await this.prisma.clip.update({ where: { id: clipId }, data: { deletedAt: new Date() } });
+    await this.opLog.logAndBroadcast(projectId, userId, 'clip.delete', { clipId });
     return { message: 'Clip deleted' };
   }
 
@@ -120,16 +119,10 @@ export class TimelineService {
       throw new ForbiddenException('Split point must be within the clip boundaries');
     }
 
-    // Update original clip to end at split point
     const updatedClip = await this.prisma.clip.update({
       where: { id: clipId },
-      data: {
-        outPointMs: splitPointInSource,
-        durationMs: splitPointInSource - clip.inPointMs,
-      },
+      data: { outPointMs: splitPointInSource, durationMs: splitPointInSource - clip.inPointMs },
     });
-
-    // Create new clip from split point to original end
     const newClip = await this.prisma.clip.create({
       data: {
         projectId,
@@ -142,56 +135,46 @@ export class TimelineService {
         transform: clip.transform as object,
       },
     });
-
+    await this.opLog.logAndBroadcast(projectId, userId, 'clip.split', { clipId, atTimeMs: dto.atTimeMs, newClipId: newClip.id });
     return { originalClip: updatedClip, newClip };
   }
 
   async batchOperation(projectId: string, userId: string, dto: BatchClipOperationDto) {
     await this.getProjectAndAuthorize(projectId, userId);
-
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       if (dto.operation === 'delete') {
-        await tx.clip.updateMany({
-          where: { id: { in: dto.clipIds }, projectId },
-          data: { deletedAt: new Date() },
-        });
+        await tx.clip.updateMany({ where: { id: { in: dto.clipIds }, projectId }, data: { deletedAt: new Date() } });
         return { deleted: dto.clipIds.length };
       }
-
       if (dto.operation === 'move' && dto.offsetMs !== undefined) {
         const updates = dto.clipIds.map((id) =>
-          tx.clip.update({
-            where: { id },
-            data: {
-              trackPositionMs: { increment: dto.offsetMs },
-              ...(dto.targetTrackId ? { trackId: dto.targetTrackId } : {}),
-            },
-          }),
+          tx.clip.update({ where: { id }, data: { trackPositionMs: { increment: dto.offsetMs }, ...(dto.targetTrackId ? { trackId: dto.targetTrackId } : {}) } }),
         );
         return Promise.all(updates);
       }
     });
+    await this.opLog.logAndBroadcast(projectId, userId, `clip.batch.${dto.operation}`, dto);
+    return result;
   }
 
-  // ── Effects ───────────────────────────────────────────
   async createEffect(projectId: string, clipId: string, userId: string, dto: CreateEffectDto) {
     await this.getClipAndAuthorize(clipId, userId);
-    return this.prisma.clipEffect.create({
-      data: { clipId, ...dto, params: dto.params || {} },
-    });
+    const effect = await this.prisma.clipEffect.create({ data: { clipId, ...dto, params: dto.params || {} } });
+    await this.opLog.logAndBroadcast(projectId, userId, 'effect.add', { clipId, effect });
+    return effect;
   }
 
   async updateEffect(projectId: string, clipId: string, effectId: string, userId: string, dto: UpdateEffectDto) {
     await this.getClipAndAuthorize(clipId, userId);
-    return this.prisma.clipEffect.update({
-      where: { id: effectId },
-      data: dto,
-    });
+    const effect = await this.prisma.clipEffect.update({ where: { id: effectId }, data: dto });
+    await this.opLog.logAndBroadcast(projectId, userId, 'effect.update', { clipId, effectId, changes: dto });
+    return effect;
   }
 
   async deleteEffect(projectId: string, clipId: string, effectId: string, userId: string) {
     await this.getClipAndAuthorize(clipId, userId);
     await this.prisma.clipEffect.delete({ where: { id: effectId } });
+    await this.opLog.logAndBroadcast(projectId, userId, 'effect.delete', { clipId, effectId });
     return { message: 'Effect deleted' };
   }
 }

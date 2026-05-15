@@ -9,14 +9,12 @@ import { AssetsModule } from './assets/assets.module';
 import { TimelineModule } from './timeline/timeline.module';
 import { ExportsModule } from './exports/exports.module';
 import { JobsModule } from './jobs/jobs.module';
+import { CollaborationModule } from './collaboration/collaboration.module';
 import configuration from './config/configuration';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      load: [configuration],
-    }),
+    ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     PrismaModule,
     AuthModule,
@@ -26,6 +24,7 @@ import configuration from './config/configuration';
     TimelineModule,
     ExportsModule,
     JobsModule,
+    CollaborationModule,
   ],
 })
 export class AppModule {}
