@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma.service';
 import { WorkspacesService } from '../workspaces/workspaces.service';
+import { OrchestratorService } from '../jobs/orchestrator.service';
 import { GetPresignedUrlDto, ConfirmUploadDto } from './dto';
 import { WorkspaceRole } from '@prisma/client';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -17,6 +18,7 @@ export class AssetsService {
     private prisma: PrismaService,
     private config: ConfigService,
     private workspacesService: WorkspacesService,
+    private orchestrator: OrchestratorService,
   ) {
     this.s3 = new S3Client({
       region: config.get<string>('aws.region') || 'us-east-1',
@@ -64,10 +66,8 @@ export class AssetsService {
       },
     });
 
-    await this.prisma.asset.update({
-      where: { id: asset.id },
-      data: { status: 'READY' },
-    });
+    // Trigger real asset processing pipeline
+    await this.orchestrator.triggerAssetProcessing(asset.id, dto.originalUrl);
 
     return asset;
   }
