@@ -64,3 +64,39 @@ URL versioning: /v2/projects/:id. The v1 route stays alive for a deprecation win
 clients to migrate. For non-breaking additive changes (new optional fields, new
 endpoints), no versioning needed. Schema versioning is tracked in a separate
 API changelog document.
+
+# Task 3: Queue & Processing Design Decisions
+
+## 1. Why BullMQ over Cloudflare Queues / SQS?
+BullMQ runs on Redis (which we already have for caching), so zero added infrastructure cost.
+It supports job progress events, priority queues, repeatable jobs, and rate limiting natively.
+SQS is better for massive scale (millions of jobs/day) and cross-region durability, but adds
+AWS cost and latency. Cloudflare Queues is serverless-native — great for Workers but awkward
+to integrate with a NestJS server process. BullMQ is the right choice for a self-hosted Node.js app.
+
+## 2. ffmpeg.wasm on Node.js — how well does it work? Limitations?
+It works, but with caveats: (a) It's 2-5x slower than native ffmpeg because it runs in a
+WebAssembly sandbox. (b) Each FFmpeg instance loads ~30MB of WASM — memory pressure with
+concurrent jobs. (c) No GPU acceleration. (d) The WASM binary must be fetched from CDN or
+bundled locally. For production, native ffmpeg via child_process is preferred. For this
+prototype, ffmpeg.wasm is zero-install and works on any OS.
+
+## 3. 30-minute video — will memory hold?
+A 30-minute 1080p video is ~3-4GB uncompressed in memory. Node.js on a typical server has
+1-4GB heap. Strategy: (a) Process in chunks — trim each clip to the exact segment needed
+rather than loading the full source, (b) Use streams where possible, (c) Set --max-old-space-size
+to 4096 for the Node process, (d) In production, use native ffmpeg which streams rather than
+loading to memory.
+
+## 4. Dead letter queue — what happens to jobs in the DLQ?
+Jobs land in the DLQ after exhausting all retry attempts. Actions: (a) Alert via Slack/email
+using a BullMQ event listener on 'failed', (b) Log to DB with full error context,
+(c) Allow manual re-queue via an admin API endpoint, (d) Investigate root cause before
+re-queuing (corrupted file, out-of-memory, S3 permission issue etc.).
+
+## 5. Cost estimate: 1 export job (1080p, 5 minutes)
+- Compute: ~5-10 minutes of CPU time on a t3.medium ($0.04/hr) = ~$0.003-0.006 per export
+- S3 storage: 5-min 1080p MP4 ≈ 500MB → $0.011/GB/month = $0.005/month per file
+- S3 transfer: 500MB download (source) + 500MB upload (output) = 1GB → $0.09/GB = $0.009
+- Total per export: ~$0.02-0.03
+- At 1000 exports/month: ~$20-30/month
