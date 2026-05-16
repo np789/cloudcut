@@ -1,106 +1,82 @@
 import { useRef, useEffect } from 'react';
 import { usePlaybackStore } from '@/state/playbackStore';
 import { useProjectStore } from '@/state/projectStore';
-import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
 import { formatTimecode } from '@/utils/timecode';
 
 export default function VideoPlayer() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const { currentTimeMs, isPlaying, volume, isMuted, setCurrentTime, setIsPlaying, setVolume, toggleMute } = usePlaybackStore();
-  const { project, clips } = useProjectStore();
+  const { clips } = useProjectStore();
 
-  // Find the current clip based on playhead position
-  const currentClip = clips.find(
-    (c) => currentTimeMs >= c.trackPositionMs && currentTimeMs < c.trackPositionMs + c.durationMs,
-  );
-
-  const totalDurationMs = Math.max(60000, ...clips.map((c) => c.trackPositionMs + c.durationMs));
+  const totalDurationMs = Math.max(60000, ...clips.map(c => c.trackPositionMs + c.durationMs));
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    if (isPlaying) {
-      video.play().catch(() => setIsPlaying(false));
-    } else {
-      video.pause();
-    }
+    if (isPlaying) video.play().catch(() => setIsPlaying(false));
+    else video.pause();
   }, [isPlaying, setIsPlaying]);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    video.volume = isMuted ? 0 : volume;
+    if (videoRef.current) videoRef.current.volume = isMuted ? 0 : volume;
   }, [volume, isMuted]);
 
-  const handleTimeUpdate = () => {
-    if (!videoRef.current) return;
-    setCurrentTime(videoRef.current.currentTime * 1000);
-  };
-
-  const handleSeek = (values: number[]) => {
-    const ms = values[0];
-    setCurrentTime(ms);
-    if (videoRef.current) videoRef.current.currentTime = ms / 1000;
-  };
-
-  const togglePlay = () => setIsPlaying(!isPlaying);
-
-  // Keyboard shortcut: space = play/pause
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
-      if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+      if (e.code === 'Space') { e.preventDefault(); setIsPlaying(!isPlaying); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isPlaying]);
+  }, [isPlaying, setIsPlaying]);
+
+  const progress = totalDurationMs > 0 ? (currentTimeMs / totalDurationMs) * 100 : 0;
 
   return (
-    <div className="flex flex-col h-full bg-black">
-      {/* Video */}
-      <div className="flex-1 flex items-center justify-center relative">
-        <video
-          ref={videoRef}
-          className="max-w-full max-h-full"
-          onTimeUpdate={handleTimeUpdate}
-          onEnded={() => setIsPlaying(false)}
-        />
-        {!currentClip && (
-          <div className="absolute inset-0 flex items-center justify-center text-white/30 text-sm">
-            No clip at current position
-          </div>
-        )}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#000' }}>
+      {/* Video area */}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+        <video ref={videoRef} style={{ maxWidth: '100%', maxHeight: '100%' }}
+          onTimeUpdate={() => videoRef.current && setCurrentTime(videoRef.current.currentTime * 1000)}
+          onEnded={() => setIsPlaying(false)} />
+        <div style={{ position: 'absolute', color: 'rgba(255,255,255,0.3)', fontSize: '13px', pointerEvents: 'none' }}>
+          No clip at current position
+        </div>
       </div>
 
       {/* Controls */}
-      <div className="px-4 py-2 bg-card border-t border-border">
-        {/* Seek bar */}
-        <Slider
-          value={[currentTimeMs]}
-          min={0}
-          max={totalDurationMs}
-          step={100}
-          onValueChange={handleSeek}
-          className="mb-2"
-        />
-        <div className="flex items-center gap-3">
-          <Button size="sm" variant="ghost" onClick={togglePlay} className="text-xs px-2">
+      <div style={{ padding: '8px 12px', background: 'var(--card)', borderTop: '1px solid var(--border)' }}>
+        {/* Progress bar */}
+        <div style={{ height: '3px', background: 'var(--border)', borderRadius: '2px', marginBottom: '8px', cursor: 'pointer' }}
+          onClick={e => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const pct = (e.clientX - rect.left) / rect.width;
+            const ms = pct * totalDurationMs;
+            setCurrentTime(ms);
+            if (videoRef.current) videoRef.current.currentTime = ms / 1000;
+          }}>
+          <div style={{ height: '100%', width: `${progress}%`, background: 'var(--primary)', borderRadius: '2px' }} />
+        </div>
+
+        {/* Buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button onClick={() => setIsPlaying(!isPlaying)} style={{
+            background: 'none', border: 'none', color: 'var(--foreground)', cursor: 'pointer', fontSize: '16px', padding: '0 4px'
+          }}>
             {isPlaying ? '⏸' : '▶'}
-          </Button>
-          <span className="font-mono text-xs text-muted-foreground">
+          </button>
+          <span style={{ fontSize: '11px', color: 'var(--muted-foreground)', fontFamily: 'monospace' }}>
             {formatTimecode(currentTimeMs)} / {formatTimecode(totalDurationMs)}
           </span>
-          <div className="flex-1" />
-          <Button size="sm" variant="ghost" className="text-xs px-2" onClick={toggleMute}>
+          <div style={{ flex: 1 }} />
+          <button onClick={toggleMute} style={{
+            background: 'none', border: 'none', color: 'var(--foreground)', cursor: 'pointer', fontSize: '14px'
+          }}>
             {isMuted ? '🔇' : '🔊'}
-          </Button>
-          <Slider
-            value={[volume]}
-            min={0} max={1} step={0.05}
-            onValueChange={([v]) => setVolume(v)}
-            className="w-20"
-          />
+          </button>
+          <input type="range" min={0} max={1} step={0.05} value={volume}
+            onChange={e => setVolume(parseFloat(e.target.value))}
+            style={{ width: '60px', accentColor: 'var(--primary)' }} />
         </div>
       </div>
     </div>

@@ -1,10 +1,9 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback } from 'react';
 import { useProjectStore } from '@/state/projectStore';
 import { useUIStore } from '@/state/uiStore';
 import { usePlaybackStore } from '@/state/playbackStore';
 import { msToPs, pxToMs, formatTimecode } from '@/utils/timecode';
 import TimelineTrack from './TimelineTrack';
-import TimelineRuler from './TimelineRuler';
 import Playhead from './Playhead';
 
 interface Props { projectId: string; }
@@ -13,144 +12,110 @@ export default function Timeline({ projectId }: Props) {
   const { tracks, clips } = useProjectStore();
   const { zoomLevel, scrollPosition, setScroll, setZoom } = useUIStore();
   const { currentTimeMs, setCurrentTime } = usePlaybackStore();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const TRACK_HEIGHT = 64;
-  const RULER_HEIGHT = 32;
-  const HEADER_WIDTH = 96;
+  const TRACK_HEIGHT = 56;
+  const HEADER_WIDTH = 80;
 
-  // Total timeline duration based on the latest clip end
-  const totalDurationMs = Math.max(
-    60000,
-    ...clips.map((c) => c.trackPositionMs + c.durationMs),
-  );
+  const totalDurationMs = Math.max(60000, ...clips.map(c => c.trackPositionMs + c.durationMs));
   const totalWidth = msToPs(totalDurationMs, zoomLevel) + 200;
 
-  // Wheel handler for zoom (Ctrl+scroll) and pan (scroll)
-  const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
-      if (e.ctrlKey) {
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? -0.01 : 0.01;
-        setZoom(zoomLevel + delta);
-      } else {
-        setScroll(scrollPosition + e.deltaY * 0.5);
-      }
-    },
-    [zoomLevel, scrollPosition, setZoom, setScroll],
-  );
-
-  // Click on ruler to seek
-  const handleRulerClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = e.clientX - rect.left + scrollPosition - HEADER_WIDTH;
-      const newTime = pxToMs(Math.max(0, x), zoomLevel);
-      setCurrentTime(newTime);
-    },
-    [scrollPosition, zoomLevel, setCurrentTime],
-  );
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (e.ctrlKey) {
+      e.preventDefault();
+      setZoom(zoomLevel + (e.deltaY > 0 ? -0.01 : 0.01));
+    } else {
+      setScroll(scrollPosition + e.deltaY * 0.5);
+    }
+  }, [zoomLevel, scrollPosition, setZoom, setScroll]);
 
   return (
-    <div
-      className="flex flex-col h-full bg-background border-t border-border select-none"
-      onWheel={handleWheel}
-    >
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--background)', borderTop: '1px solid var(--border)' }}
+      onWheel={handleWheel}>
+
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-3 py-1 border-b border-border bg-card text-xs">
-        <span className="text-muted-foreground font-mono">
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '8px',
+        padding: '4px 12px', borderBottom: '1px solid var(--border)',
+        background: 'var(--card)', flexShrink: 0, height: '32px',
+      }}>
+        <span style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--muted-foreground)' }}>
           {formatTimecode(currentTimeMs)}
         </span>
-        <div className="flex-1" />
-        <button
-          onClick={() => setZoom(zoomLevel * 1.3)}
-          className="px-2 py-0.5 rounded bg-secondary hover:bg-secondary/80 text-secondary-foreground"
-        >
-          +
-        </button>
-        <button
-          onClick={() => setZoom(zoomLevel * 0.7)}
-          className="px-2 py-0.5 rounded bg-secondary hover:bg-secondary/80 text-secondary-foreground"
-        >
-          −
-        </button>
-        <button
-          onClick={() => setZoom(0.1)}
-          className="px-2 py-0.5 rounded bg-secondary hover:bg-secondary/80 text-secondary-foreground"
-        >
-          Fit
-        </button>
+        <div style={{ flex: 1 }} />
+        {['+', '−', 'Fit'].map(label => (
+          <button key={label} onClick={() => {
+            if (label === '+') setZoom(zoomLevel * 1.3);
+            else if (label === '−') setZoom(zoomLevel * 0.7);
+            else setZoom(0.1);
+          }} style={{
+            padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--border)',
+            background: 'var(--secondary)', color: 'var(--foreground)',
+            fontSize: '12px', cursor: 'pointer',
+          }}>{label}</button>
+        ))}
       </div>
 
-      {/* Main scroll area */}
-      <div className="flex-1 overflow-hidden relative" ref={containerRef}>
-        <div
-          className="absolute inset-0 overflow-x-auto overflow-y-auto"
-          onScroll={(e) => setScroll((e.target as HTMLDivElement).scrollLeft)}
-        >
-          <div style={{ width: totalWidth + HEADER_WIDTH, minHeight: '100%' }}>
-            {/* Ruler row */}
-            <div className="flex sticky top-0 z-20 bg-card border-b border-border">
-              {/* Track header spacer */}
-              <div style={{ width: HEADER_WIDTH, minWidth: HEADER_WIDTH }} className="border-r border-border" />
-              {/* Ruler */}
-              <div
-                className="relative flex-1 cursor-pointer"
-                style={{ height: RULER_HEIGHT }}
-                onClick={handleRulerClick}
-              >
-                <TimelineRuler
-                  totalDurationMs={totalDurationMs}
+      {/* Scrollable content */}
+      <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}
+        onScroll={e => setScroll((e.target as HTMLDivElement).scrollLeft)}>
+        <div style={{ width: totalWidth + HEADER_WIDTH, minHeight: '100%' }}>
+
+          {/* Ruler */}
+          <div style={{ display: 'flex', height: '24px', position: 'sticky', top: 0, zIndex: 10, background: 'var(--card)', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ width: HEADER_WIDTH, minWidth: HEADER_WIDTH, borderRight: '1px solid var(--border)' }} />
+            <div style={{ flex: 1, position: 'relative', cursor: 'pointer' }}
+              onClick={e => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = e.clientX - rect.left + scrollPosition;
+                setCurrentTime(pxToMs(Math.max(0, x), zoomLevel));
+              }}>
+              {/* Ruler ticks */}
+              {Array.from({ length: Math.ceil(totalDurationMs / 5000) }).map((_, i) => {
+                const ms = i * 5000;
+                const x = ms * zoomLevel;
+                return (
+                  <div key={ms} style={{ position: 'absolute', left: x, top: 0, bottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                    <div style={{ width: '1px', height: '8px', background: 'var(--border)' }} />
+                    <span style={{ fontSize: '9px', color: 'var(--muted-foreground)', fontFamily: 'monospace', marginLeft: '2px' }}>
+                      {ms >= 60000 ? `${Math.floor(ms/60000)}:${String(Math.floor((ms%60000)/1000)).padStart(2,'0')}` : `${ms/1000}s`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Tracks */}
+          {tracks.map(track => (
+            <div key={track.id} style={{ display: 'flex', height: TRACK_HEIGHT, borderBottom: '1px solid var(--border)' }}>
+              {/* Track header */}
+              <div style={{
+                width: HEADER_WIDTH, minWidth: HEADER_WIDTH,
+                borderRight: '1px solid var(--border)',
+                background: 'var(--card)',
+                display: 'flex', flexDirection: 'column', justifyContent: 'center',
+                padding: '0 8px',
+              }}>
+                <span style={{ fontSize: '11px', fontWeight: 600, color: track.color }}>{track.label}</span>
+                <span style={{ fontSize: '10px', color: 'var(--muted-foreground)' }}>{track.type}</span>
+              </div>
+
+              {/* Clips area */}
+              <div style={{ flex: 1, position: 'relative' }}>
+                <TimelineTrack
+                  track={track}
+                  projectId={projectId}
                   zoomLevel={zoomLevel}
                   scrollPosition={scrollPosition}
-                  height={RULER_HEIGHT}
+                  trackHeight={TRACK_HEIGHT}
                 />
               </div>
             </div>
-
-            {/* Tracks */}
-            {tracks.map((track) => (
-              <div key={track.id} className="flex border-b border-border" style={{ height: TRACK_HEIGHT }}>
-                {/* Track header */}
-                <div
-                  style={{ width: HEADER_WIDTH, minWidth: HEADER_WIDTH }}
-                  className="flex flex-col justify-center px-2 border-r border-border bg-card"
-                >
-                  <span
-                    className="text-xs font-semibold truncate"
-                    style={{ color: track.color }}
-                  >
-                    {track.label}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">{track.type}</span>
-                </div>
-                {/* Clip area */}
-                <div
-                  className="relative flex-1"
-                  style={{ height: TRACK_HEIGHT }}
-                >
-                  <TimelineTrack
-                    track={track}
-                    projectId={projectId}
-                    zoomLevel={zoomLevel}
-                    scrollPosition={scrollPosition}
-                    trackHeight={TRACK_HEIGHT}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+          ))}
         </div>
 
-        {/* Playhead overlay (positioned over the entire scrollable content) */}
-        <div
-          className="absolute top-0 bottom-0 pointer-events-none"
-          style={{ left: HEADER_WIDTH, right: 0, overflow: 'hidden' }}
-        >
-          <Playhead
-            currentTimeMs={currentTimeMs}
-            zoomLevel={zoomLevel}
-            scrollPosition={scrollPosition}
-          />
+        {/* Playhead */}
+        <div style={{ position: 'absolute', top: 0, bottom: 0, left: HEADER_WIDTH, right: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+          <Playhead currentTimeMs={currentTimeMs} zoomLevel={zoomLevel} scrollPosition={scrollPosition} />
         </div>
       </div>
     </div>

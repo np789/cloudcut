@@ -1,9 +1,5 @@
 import { useState } from 'react';
 import { authApi } from '@/services/api';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
 interface Props { onLogin: (token: string, userId: string) => void; }
 
@@ -27,31 +23,106 @@ export default function LoginPage({ onLogin }: Props) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-2xl">☁️ CloudCut</CardTitle>
-          <CardDescription>Sign in to your account</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div>
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()} />
-          </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button onClick={handleSubmit} disabled={loading} className="w-full">
-            {loading ? 'Signing in...' : 'Sign In'}
-          </Button>
-          <p className="text-xs text-muted-foreground text-center">
-            Demo: alice@cloudcut.dev / password123
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'var(--background)',
+    }}>
+      <div style={{
+        width: '100%',
+        maxWidth: '380px',
+        background: 'var(--card)',
+        border: '1px solid var(--border)',
+        borderRadius: '12px',
+        padding: '32px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '20px',
+      }}>
+        {/* Header */}
+        <div>
+          <h1 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '4px' }}>
+            ☁️ CloudCut
+          </h1>
+          <p style={{ color: 'var(--muted-foreground)', fontSize: '14px' }}>
+            Sign in to your account
           </p>
-        </CardContent>
-      </Card>
+        </div>
+
+        {/* Email */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <label style={{ fontSize: '13px', fontWeight: 500 }}>Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={{
+              padding: '10px 12px',
+              background: 'var(--input)',
+              border: '1px solid var(--border)',
+              borderRadius: '6px',
+              color: 'var(--foreground)',
+              fontSize: '14px',
+              outline: 'none',
+            }}
+          />
+        </div>
+
+        {/* Password */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <label style={{ fontSize: '13px', fontWeight: 500 }}>Password</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+            style={{
+              padding: '10px 12px',
+              background: 'var(--input)',
+              border: '1px solid var(--border)',
+              borderRadius: '6px',
+              color: 'var(--foreground)',
+              fontSize: '14px',
+              outline: 'none',
+            }}
+          />
+        </div>
+
+        {/* Error */}
+        {error && (
+          <p style={{ color: '#f87171', fontSize: '13px' }}>{error}</p>
+        )}
+
+        {/* Button */}
+        <button
+          onClick={handleSubmit}
+          disabled={loading}
+          style={{
+            padding: '11px',
+            background: 'var(--primary)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            fontSize: '14px',
+            fontWeight: 600,
+            cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.7 : 1,
+          }}
+        >
+          {loading ? 'Signing in...' : 'Sign In'}
+        </button>
+
+        {/* Demo hint */}
+        <p style={{
+          color: 'var(--muted-foreground)',
+          fontSize: '12px',
+          textAlign: 'center',
+        }}>
+          Demo: alice@cloudcut.dev / password123
+        </p>
+      </div>
     </div>
   );
 }

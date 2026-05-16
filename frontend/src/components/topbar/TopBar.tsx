@@ -1,5 +1,4 @@
 import { Project } from '@/types';
-import { Button } from '@/components/ui/button';
 import { exportsApi } from '@/services/api';
 import { useState } from 'react';
 
@@ -13,8 +12,8 @@ export default function TopBar({ project }: Props) {
     setExporting(true);
     try {
       const job = await exportsApi.create(project.id);
-      alert(`Export started! Job ID: ${job.id}\nStatus: ${job.status}`);
-    } catch (e) {
+      alert(`Export started! Job ID: ${job.id}`);
+    } catch {
       alert('Export failed');
     } finally {
       setExporting(false);
@@ -22,32 +21,59 @@ export default function TopBar({ project }: Props) {
   };
 
   return (
-    <div className="flex items-center justify-between h-12 px-4 border-b border-border bg-card">
-      <div className="flex items-center gap-3">
-        <span className="font-bold text-sm">☁️ CloudCut</span>
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      height: '48px',
+      padding: '0 16px',
+      borderBottom: '1px solid var(--border)',
+      background: 'var(--card)',
+      flexShrink: 0,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <span style={{ fontWeight: 700, fontSize: '14px' }}>☁️ CloudCut</span>
         {project && (
-          <span className="text-muted-foreground text-sm">{project.name}</span>
+          <span style={{ color: 'var(--muted-foreground)', fontSize: '13px' }}>
+            {project.name}
+          </span>
         )}
       </div>
-      <div className="flex items-center gap-2">
-        <Button
-          size="sm"
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <button
           onClick={handleExport}
           disabled={exporting || !project}
+          style={{
+            padding: '6px 14px',
+            background: 'var(--primary)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            fontSize: '13px',
+            cursor: 'pointer',
+            opacity: exporting ? 0.7 : 1,
+          }}
         >
           {exporting ? 'Exporting...' : 'Export'}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
+        </button>
+        <button
           onClick={() => {
             localStorage.removeItem('accessToken');
             localStorage.removeItem('userId');
             window.location.reload();
           }}
+          style={{
+            padding: '6px 14px',
+            background: 'transparent',
+            color: 'var(--foreground)',
+            border: '1px solid var(--border)',
+            borderRadius: '6px',
+            fontSize: '13px',
+            cursor: 'pointer',
+          }}
         >
           Sign out
-        </Button>
+        </button>
       </div>
     </div>
   );

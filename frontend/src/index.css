@@ -1,30 +1,36 @@
 @import "tailwindcss";
 
 :root {
-  --color-background: hsl(224 71% 4%);
-  --color-foreground: hsl(213 31% 91%);
-  --color-card: hsl(224 71% 6%);
-  --color-card-foreground: hsl(213 31% 91%);
-  --color-primary: hsl(256 91% 69%);
-  --color-primary-foreground: hsl(222.2 47.4% 1.2%);
-  --color-secondary: hsl(222.2 47.4% 11.2%);
-  --color-secondary-foreground: hsl(210 40% 98%);
-  --color-muted: hsl(223 47% 11%);
-  --color-muted-foreground: hsl(215.4 16.3% 56.9%);
-  --color-accent: hsl(216 34% 17%);
-  --color-accent-foreground: hsl(210 40% 98%);
-  --color-destructive: hsl(0 63% 31%);
-  --color-border: hsl(216 34% 17%);
-  --color-input: hsl(216 34% 17%);
-  --color-ring: hsl(256 91% 69%);
+  --background: #05070f;
+  --foreground: #c9d1e0;
+  --card: #0a0d1a;
+  --card-foreground: #c9d1e0;
+  --primary: #6c63ff;
+  --primary-foreground: #ffffff;
+  --secondary: #111827;
+  --secondary-foreground: #c9d1e0;
+  --muted: #111827;
+  --muted-foreground: #6b7280;
+  --accent: #1f2937;
+  --accent-foreground: #c9d1e0;
+  --destructive: #7f1d1d;
+  --destructive-foreground: #fca5a5;
+  --border: #1f2937;
+  --input: #1f2937;
+  --ring: #6c63ff;
   --radius: 0.5rem;
 }
 
 * {
-  border-color: var(--color-border);
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border-color: var(--border);
 }
 
 body {
-  background-color: var(--color-background);
-  color: var(--color-foreground);
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
