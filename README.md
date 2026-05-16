@@ -3,15 +3,38 @@
 A collaborative video editing SaaS prototype built for the CloudCut Full-Stack Engineering Challenge.
 
 ## 🏗️ Architecture
-Browser ──► React 19 + Zustand ──► NestJS REST API ──► PostgreSQL
-                │                        │
-                └── Pusher.js ◄──────── Pusher
-                                         │
-                              BullMQ ──► Redis
-                                 │
-                            ffmpeg.wasm
-                                 │
-                              AWS S3
+```
+┌─────────────────────────────────────────┐
+│           Browser (React 19)            │
+│  ┌──────────┐  ┌──────────┐  ┌───────┐  │
+│  │ Timeline │  │  Player  │  │Assets │  │
+│  └────┬─────┘  └────┬─────┘  └───┬───┘  │
+│       └─────────────┴────────────┘      │
+│              Zustand Stores             │
+│         ┌──────────┬──────────┐         │
+│         │ axios    │ Pusher.js│         │
+│         └────┬─────┴────┬─────┘         │
+└──────────────┼──────────┼───────────────┘
+               │          │
+        ┌──────┴──────┐   │
+        │  NestJS API │   │
+        │  :3000      │   │
+        └──────┬──────┘   │
+               │          │
+    ┌──────────┴───────┐  │
+    │                  │  │
+┌───┴────┐        ┌────┴──┴──┐
+│Postgres│        │  Pusher  │
+└───┬────┘        └──────────┘
+    │
+┌───┴────┐   ┌────────┐   ┌──────┐
+│ Redis  │──►│ BullMQ │──►│ffmpeg│
+└────────┘   └────────┘   └──┬───┘
+                             │
+                          ┌──┴───┐
+                          │AWS S3│
+                          └──────┘
+```
 
 ## 🚀 Quick Start
 
@@ -56,37 +79,39 @@ Go to http://localhost:5173
 **Demo login:** alice@cloudcut.dev / password123
 
 ## 📁 Project Structure
+```
 cloudcut/
-├── backend/              # NestJS API
+├── README.md
+├── docker-compose.yml
+├── backend/
 │   ├── src/
-│   │   ├── auth/         # JWT authentication
-│   │   ├── workspaces/   # Workspace management
-│   │   ├── projects/     # Project CRUD
-│   │   ├── assets/       # Asset upload + S3 presigned URLs
-│   │   ├── timeline/     # Tracks, clips, effects
-│   │   ├── exports/      # Export job management
-│   │   ├── jobs/         # BullMQ processors + ffmpeg.wasm
-│   │   └── collaboration/ # Pusher real-time sync
+│   │   ├── auth/            # JWT authentication
+│   │   ├── workspaces/      # Workspace management
+│   │   ├── projects/        # Project CRUD
+│   │   ├── assets/          # Asset upload + S3 presigned URLs
+│   │   ├── timeline/        # Tracks, clips, effects
+│   │   ├── exports/         # Export job management
+│   │   ├── jobs/            # BullMQ processors + ffmpeg.wasm
+│   │   └── collaboration/   # Pusher real-time sync
 │   ├── prisma/
-│   │   ├── schema.prisma # Database schema
-│   │   └── seed.ts       # Demo data
-│   └── DESIGN.md         # Architecture decisions
-│
-├── frontend/             # React 19 editor
+│   │   ├── schema.prisma    # Database schema
+│   │   └── seed.ts          # Demo data
+│   └── DESIGN.md            # Architecture decisions
+├── frontend/
 │   └── src/
 │       ├── components/
-│       │   ├── timeline/ # Timeline, clips, ruler, playhead
-│       │   ├── player/   # Video player
-│       │   ├── inspector/ # Clip inspector + effects
-│       │   └── assets/   # Asset browser
-│       ├── state/        # Zustand stores + command pattern
-│       ├── hooks/        # usePusher, useKeyboardShortcuts
-│       └── services/     # API client
-│
+│       │   ├── timeline/    # Timeline, clips, ruler, playhead
+│       │   ├── player/      # Video player
+│       │   ├── inspector/   # Clip inspector + effects
+│       │   └── assets/      # Asset browser
+│       ├── state/           # Zustand stores + command pattern
+│       ├── hooks/           # usePusher, useKeyboardShortcuts
+│       └── services/        # API client
 └── docs/
-├── architecture.md   # System architecture diagram
-├── api-spec.md       # API documentation
-└── database-design.md # Schema + design decisions
+    ├── architecture.md      # System architecture
+    ├── api-spec.md          # API documentation
+    └── database-design.md   # Schema decisions
+```
 
 ## 🛠️ Tech Stack
 | Layer | Technology |
