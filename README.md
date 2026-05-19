@@ -141,3 +141,17 @@ cloudcut/
 - [x] Cursor-based pagination
 - [x] Idempotent export jobs
 - [x] Daily cleanup cron job
+
+## 📸 Screenshots
+
+### Editor
+![Editor](docs/screenshots/editor.png)
+
+### Timeline with Clips
+![Timeline](docs/screenshots/timeline.png)
+
+### Asset Upload
+![Upload](docs/screenshots/upload.png)
+
+### Inspector Panel
+![Inspector](docs/screenshots/inspector.png)
