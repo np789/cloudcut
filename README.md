@@ -144,14 +144,8 @@ cloudcut/
 
 ## 📸 Screenshots
 
-### Editor
-![Editor](docs/screenshots/editor.png)
+### Login
+![Editor](docs/screenshots/login.png)
 
-### Timeline with Clips
-![Timeline](docs/screenshots/timeline.png)
-
-### Asset Upload
-![Upload](docs/screenshots/upload.png)
-
-### Inspector Panel
-![Inspector](docs/screenshots/inspector.png)
+### Panels
+![Timeline](docs/screenshots/panel.png)
