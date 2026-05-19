@@ -145,7 +145,7 @@ cloudcut/
 ## 📸 Screenshots
 
 ### Login
-![Editor](docs/screenshots/login.png)
+![Login](docs/screenshots/login.png)
 
 ### Panels
-![Timeline](docs/screenshots/panel.png)
+![Panels](docs/screenshots/panel.png)
