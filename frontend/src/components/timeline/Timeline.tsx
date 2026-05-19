@@ -13,7 +13,7 @@ export default function Timeline({ projectId }: Props) {
   const { zoomLevel, scrollPosition, setScroll, setZoom } = useUIStore();
   const { currentTimeMs, setCurrentTime } = usePlaybackStore();
   const TRACK_HEIGHT = 56;
-  const HEADER_WIDTH = 80;
+  const HEADER_WIDTH = 72;
 
   const totalDurationMs = Math.max(60000, ...clips.map(c => c.trackPositionMs + c.durationMs));
   const totalWidth = msToPs(totalDurationMs, zoomLevel) + 200;
@@ -28,8 +28,10 @@ export default function Timeline({ projectId }: Props) {
   }, [zoomLevel, scrollPosition, setZoom, setScroll]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--background)', borderTop: '1px solid var(--border)' }}
-      onWheel={handleWheel}>
+    <div style={{
+      display: 'flex', flexDirection: 'column', height: '100%',
+      background: 'var(--background)', borderTop: '1px solid var(--border)',
+    }} onWheel={handleWheel}>
 
       {/* Toolbar */}
       <div style={{
@@ -37,7 +39,10 @@ export default function Timeline({ projectId }: Props) {
         padding: '4px 12px', borderBottom: '1px solid var(--border)',
         background: 'var(--card)', flexShrink: 0, height: '32px',
       }}>
-        <span style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--muted-foreground)' }}>
+        <span style={{
+          fontFamily: 'monospace', fontSize: '12px',
+          color: 'var(--muted-foreground)',
+        }}>
           {formatTimecode(currentTimeMs)}
         </span>
         <div style={{ flex: 1 }} />
@@ -47,60 +52,113 @@ export default function Timeline({ projectId }: Props) {
             else if (label === '−') setZoom(zoomLevel * 0.7);
             else setZoom(0.1);
           }} style={{
-            padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--border)',
+            padding: '2px 8px', borderRadius: '4px',
+            border: '1px solid var(--border)',
             background: 'var(--secondary)', color: 'var(--foreground)',
             fontSize: '12px', cursor: 'pointer',
           }}>{label}</button>
         ))}
       </div>
 
-      {/* Scrollable content */}
-      <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}
-        onScroll={e => setScroll((e.target as HTMLDivElement).scrollLeft)}>
-        <div style={{ width: totalWidth + HEADER_WIDTH, minHeight: '100%' }}>
+      {/* Timeline body */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
-          {/* Ruler */}
-          <div style={{ display: 'flex', height: '24px', position: 'sticky', top: 0, zIndex: 10, background: 'var(--card)', borderBottom: '1px solid var(--border)' }}>
-            <div style={{ width: HEADER_WIDTH, minWidth: HEADER_WIDTH, borderRight: '1px solid var(--border)' }} />
-            <div style={{ flex: 1, position: 'relative', cursor: 'pointer' }}
-              onClick={e => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const x = e.clientX - rect.left + scrollPosition;
-                setCurrentTime(pxToMs(Math.max(0, x), zoomLevel));
+        {/* Left: fixed track headers */}
+        <div style={{
+          width: HEADER_WIDTH,
+          minWidth: HEADER_WIDTH,
+          flexShrink: 0,
+          borderRight: '2px solid var(--border)',
+          background: 'var(--card)',
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
+          {/* Ruler header spacer */}
+          <div style={{
+            height: '28px',
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--card)',
+          }} />
+
+          {/* Track headers */}
+          {tracks.map(track => (
+            <div key={track.id} style={{
+              height: TRACK_HEIGHT,
+              borderBottom: '1px solid var(--border)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              padding: '0 10px',
+              background: 'var(--card)',
+            }}>
+              <span style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                color: track.color,
               }}>
-              {/* Ruler ticks */}
+                {track.label}
+              </span>
+              <span style={{
+                fontSize: '10px',
+                color: 'var(--muted-foreground)',
+                marginTop: '2px',
+              }}>
+                {track.type}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Right: scrollable content */}
+        <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}
+          onScroll={e => setScroll((e.target as HTMLDivElement).scrollLeft)}>
+          <div style={{ width: totalWidth, minHeight: '100%', position: 'relative' }}>
+
+            {/* Ruler */}
+            <div style={{
+              height: '28px',
+              position: 'sticky', top: 0, zIndex: 10,
+              background: 'var(--card)',
+              borderBottom: '1px solid var(--border)',
+              cursor: 'pointer',
+            }} onClick={e => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const x = e.clientX - rect.left + scrollPosition;
+              setCurrentTime(pxToMs(Math.max(0, x), zoomLevel));
+            }}>
               {Array.from({ length: Math.ceil(totalDurationMs / 5000) }).map((_, i) => {
                 const ms = i * 5000;
                 const x = ms * zoomLevel;
                 return (
-                  <div key={ms} style={{ position: 'absolute', left: x, top: 0, bottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                    <div style={{ width: '1px', height: '8px', background: 'var(--border)' }} />
-                    <span style={{ fontSize: '9px', color: 'var(--muted-foreground)', fontFamily: 'monospace', marginLeft: '2px' }}>
-                      {ms >= 60000 ? `${Math.floor(ms/60000)}:${String(Math.floor((ms%60000)/1000)).padStart(2,'0')}` : `${ms/1000}s`}
+                  <div key={ms} style={{
+                    position: 'absolute', left: x, top: 0, bottom: 0,
+                  }}>
+                    <div style={{
+                      width: '1px', height: '8px',
+                      background: 'var(--border)',
+                    }} />
+                    <span style={{
+                      fontSize: '9px', color: 'var(--muted-foreground)',
+                      fontFamily: 'monospace', marginLeft: '3px',
+                      position: 'absolute', top: '8px', whiteSpace: 'nowrap',
+                    }}>
+                      {ms >= 60000
+                        ? `${Math.floor(ms/60000)}:${String(Math.floor((ms%60000)/1000)).padStart(2,'0')}`
+                        : `${ms/1000}s`}
                     </span>
                   </div>
                 );
               })}
             </div>
-          </div>
 
-          {/* Tracks */}
-          {tracks.map(track => (
-            <div key={track.id} style={{ display: 'flex', height: TRACK_HEIGHT, borderBottom: '1px solid var(--border)' }}>
-              {/* Track header */}
-              <div style={{
-                width: HEADER_WIDTH, minWidth: HEADER_WIDTH,
-                borderRight: '1px solid var(--border)',
-                background: 'var(--card)',
-                display: 'flex', flexDirection: 'column', justifyContent: 'center',
-                padding: '0 8px',
+            {/* Tracks */}
+            {tracks.map(track => (
+              <div key={track.id} style={{
+                height: TRACK_HEIGHT,
+                borderBottom: '1px solid var(--border)',
+                position: 'relative',
+                background: 'rgba(255,255,255,0.01)',
               }}>
-                <span style={{ fontSize: '11px', fontWeight: 600, color: track.color }}>{track.label}</span>
-                <span style={{ fontSize: '10px', color: 'var(--muted-foreground)' }}>{track.type}</span>
-              </div>
-
-              {/* Clips area */}
-              <div style={{ flex: 1, position: 'relative' }}>
                 <TimelineTrack
                   track={track}
                   projectId={projectId}
@@ -109,13 +167,20 @@ export default function Timeline({ projectId }: Props) {
                   trackHeight={TRACK_HEIGHT}
                 />
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
 
-        {/* Playhead */}
-        <div style={{ position: 'absolute', top: 0, bottom: 0, left: HEADER_WIDTH, right: 0, pointerEvents: 'none', overflow: 'hidden' }}>
-          <Playhead currentTimeMs={currentTimeMs} zoomLevel={zoomLevel} scrollPosition={scrollPosition} />
+          {/* Playhead */}
+          <div style={{
+            position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
+            pointerEvents: 'none', overflow: 'hidden',
+          }}>
+            <Playhead
+              currentTimeMs={currentTimeMs}
+              zoomLevel={zoomLevel}
+              scrollPosition={scrollPosition}
+            />
+          </div>
         </div>
       </div>
     </div>

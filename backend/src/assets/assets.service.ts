@@ -56,19 +56,24 @@ export class AssetsService {
     });
     if (!project) throw new NotFoundException('Project not found');
 
+    const filename = dto.filename || dto.originalUrl.split('/').pop() || 'unknown';
+
     const asset = await this.prisma.asset.create({
       data: {
         projectId: dto.projectId,
         uploadedById: userId,
         type: dto.type,
         originalUrl: dto.originalUrl,
-        status: 'PROCESSING',
+        status: 'READY',
+        metadata: {
+          filename,
+          durationMs: dto.durationMs || 0,
+          fileSizeBytes: 0,
+        },
       },
     });
 
-    // Trigger real asset processing pipeline
     await this.orchestrator.triggerAssetProcessing(asset.id, dto.originalUrl);
-
     return asset;
   }
 

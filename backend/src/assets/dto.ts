@@ -1,4 +1,4 @@
-import { IsString, IsEnum, IsUUID } from 'class-validator';
+import { IsString, IsEnum, IsUUID, IsOptional, IsNumber } from 'class-validator';
 import { AssetType } from '@prisma/client';
 
 export class GetPresignedUrlDto {
@@ -27,4 +27,8 @@ export class ConfirmUploadDto {
 
   @IsString()
   filename!: string;
+
+  @IsOptional()
+  @IsNumber()
+  durationMs?: number;
 }

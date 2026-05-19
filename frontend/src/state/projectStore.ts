@@ -1,11 +1,12 @@
 import { create } from 'zustand';
-import { Project, Track, Clip, ClipEffect } from '@/types';
-import { projectsApi, clipsApi, effectsApi } from '@/services/api';
+import { Project, Track, Clip, ClipEffect, Asset } from '@/types';
+import { projectsApi } from '@/services/api';
 
 interface ProjectState {
   project: Project | null;
   tracks: Track[];
   clips: Clip[];
+  assets: Asset[];
   effects: Record<string, ClipEffect[]>;
   isLoading: boolean;
   error: string | null;
@@ -24,6 +25,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   project: null,
   tracks: [],
   clips: [],
+  assets: [],
   effects: {},
   isLoading: false,
   error: null,
@@ -42,14 +44,24 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         }
       }
 
-      set({ project, tracks: project.tracks, clips, effects, isLoading: false });
+      set({
+        project,
+        tracks: project.tracks,
+        clips,
+        assets: project.assets || [],
+        effects,
+        isLoading: false,
+      });
     } catch (e) {
       set({ error: 'Failed to load project', isLoading: false });
     }
   },
 
   addClip: (clip: Clip) =>
-    set((state) => ({ clips: [...state.clips, clip], effects: { ...state.effects, [clip.id]: [] } })),
+    set((state) => ({
+      clips: [...state.clips, clip],
+      effects: { ...state.effects, [clip.id]: [] },
+    })),
 
   updateClipLocal: (clipId: string, changes: Partial<Clip>) =>
     set((state) => ({
@@ -60,12 +72,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set((state) => {
       const newEffects = { ...state.effects };
       delete newEffects[clipId];
-      return { clips: state.clips.filter((c) => c.id !== clipId), effects: newEffects };
+      return {
+        clips: state.clips.filter((c) => c.id !== clipId),
+        effects: newEffects,
+      };
     }),
 
   addEffect: (clipId: string, effect: ClipEffect) =>
     set((state) => ({
-      effects: { ...state.effects, [clipId]: [...(state.effects[clipId] || []), effect] },
+      effects: {
+        ...state.effects,
+        [clipId]: [...(state.effects[clipId] || []), effect],
+      },
     })),
 
   updateEffectLocal: (clipId: string, effectId: string, changes: Partial<ClipEffect>) =>
@@ -86,7 +104,6 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       },
     })),
 
-  // Apply incoming Pusher operation from another user
   applyRemoteOperation: (operation) => {
     const { type, payload } = operation;
     const p = payload as Record<string, unknown>;
